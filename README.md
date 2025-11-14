@@ -117,7 +117,7 @@ If you use this code, please reference:
 
 ```
 Christos Tsourveloudis. "UAV Navigation using Reinforcement Learning: A Systematic Approach to Progressive Reward Function Design"
-Implementation available at: https://github.com/christsourveloudis/progressive-reward-design
+Implementation available at: https://github.com/christsourvel/progressive-reward-design
 ```
 
 ## License
