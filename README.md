@@ -111,13 +111,19 @@ Tests trained agents on novel geometries (circles, figure-8s, spirals, helixes) 
 
 ## Cite Our Work
 
-**Paper Status**: Under review
+**Paper Status**: Under review, preprint available at Research Square https://doi.org/10.21203/rs.3.rs-8060158/v1
 
 If you use this code, please reference:
 
-```
-Christos Tsourveloudis. "UAV Navigation using Reinforcement Learning: A Systematic Approach to Progressive Reward Function Design"
-Implementation available at: https://github.com/christsourvel/progressive-reward-design
+```bibtex
+@article{tsourveloudis2025uav,
+  title={UAV Navigation using Reinforcement Learning: A Systematic Approach to Progressive Reward Function Design},
+  author={Tsourveloudis, Christos and Doitsidis, Lefteris},
+  journal={Research Square},
+  year={2025},
+  doi={10.21203/rs.3.rs-8060158/v1},
+  note={Preprint, Version 1}
+}
 ```
 
 ## License
