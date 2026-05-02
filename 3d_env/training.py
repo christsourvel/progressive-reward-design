@@ -14,6 +14,9 @@ np.random.seed(SEED)
 random.seed(SEED)
 torch.manual_seed(SEED)
 
+WIND_ENABLED = True
+WIND_GUST_MAGNITUDE = 3.0
+
 def train_agent(algorithm="PPO", config="waypoint", timesteps=300_000, model_name="agent"):
     # unique run id for logs and saved model
     run_id = time.strftime("%Y%m%d-%H%M%S")
@@ -22,7 +25,11 @@ def train_agent(algorithm="PPO", config="waypoint", timesteps=300_000, model_nam
     if algorithm == "PPO":
         # Vectorized env with normalization for more stable learning
         def make_env():
-            env = FixedWingUAVEnv(config=config)
+            env = FixedWingUAVEnv(
+                config=config,
+                wind_enabled=WIND_ENABLED,
+                wind_speed_mean=WIND_GUST_MAGNITUDE,
+            )
             env.reset(seed=SEED)
             return Monitor(env)
         venv = DummyVecEnv([make_env])
@@ -46,7 +53,11 @@ def train_agent(algorithm="PPO", config="waypoint", timesteps=300_000, model_nam
     elif algorithm == "SAC":
         # Vectorized env with normalization for more stable learning
         def make_env():
-            env = FixedWingUAVEnv(config=config)
+            env = FixedWingUAVEnv(
+                config=config,
+                wind_enabled=WIND_ENABLED,
+                wind_speed_mean=WIND_GUST_MAGNITUDE,
+            )
             env.reset(seed=SEED)
             return Monitor(env)
         venv = DummyVecEnv([make_env])
@@ -68,7 +79,11 @@ def train_agent(algorithm="PPO", config="waypoint", timesteps=300_000, model_nam
     elif algorithm == "TD3":
         # Vectorized env with normalization for stability (like SAC)
         def make_env():
-            env = FixedWingUAVEnv(config=config)
+            env = FixedWingUAVEnv(
+                config=config,
+                wind_enabled=WIND_ENABLED,
+                wind_speed_mean=WIND_GUST_MAGNITUDE,
+            )
             env.reset(seed=SEED)
             return Monitor(env)
         venv = DummyVecEnv([make_env])
@@ -96,7 +111,7 @@ def train_agent(algorithm="PPO", config="waypoint", timesteps=300_000, model_nam
 
 def train_all_experiments():
     """Train all algorithm combinations for comparison"""
-    algorithms = ["SAC"]#, "SAC", "TD3"]
+    algorithms = ["TD3"]#, "SAC", "TD3"
     configs = ["waypoint"]
     timesteps = 1_000_000
     
@@ -124,20 +139,20 @@ def train_all_experiments():
                     if isinstance(vec_env, VecNormalize) or hasattr(vec_env, "save"):
                         vec_env.save(model_path + "_vn.pkl")
                 except Exception as e_save:
-                    print(f"⚠️ Could not save VecNormalize stats: {e_save}")
+                    print(f" Could not save VecNormalize stats: {e_save}")
                 
-                print(f"✅ Saved {algorithm} {config} model to {model_path}.zip")
+                print(f" Saved {algorithm} {config} model to {model_path}.zip")
                 results.append((algorithm, config, model_path))
                 
             except Exception as e:
-                print(f"❌ Failed to train {algorithm} {config}: {e}")
+                print(f" Failed to train {algorithm} {config}: {e}")
                 results.append((algorithm, config, f"FAILED: {e}"))
     
     print(f"\n{'='*60}")
     print("TRAINING SUMMARY")
     print(f"{'='*60}")
     for alg, cfg, result in results:
-        status = "✅ SUCCESS" if not result.startswith("FAILED") else "❌ FAILED"
+        status = " SUCCESS" if not result.startswith("FAILED") else " FAILED"
         print(f"{alg:>5} {cfg:>6}: {status}")
     
     return results

@@ -191,7 +191,7 @@ NUM_EPISODES = 1
 
 
 def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode_seed=42,
-                                     wind_enabled=True, wind_gust_magnitude=1.0,
+                                     wind_enabled=True, wind_gust_magnitude=3.0,
                                      wind_gust_duration=5.0, wind_transition_time=1.0):
     """Plot all three algorithms (PPO, SAC, TD3) on the same 3D plot for comparison"""
     from mpl_toolkits.mplot3d import Axes3D
@@ -213,8 +213,8 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
     env = UnseenPathEnv(config=config, path_type=path_type,
                        wind_enabled=wind_enabled,
                        wind_speed_mean=wind_gust_magnitude,
-                       wind_speed_std=wind_gust_duration,
-                       wind_heading_std=wind_transition_time)
+                       wind_gust_duration=wind_gust_duration,
+                       wind_transition_time=wind_transition_time)
     env.reset(seed=episode_seed)
     
     # Plot desired path first
@@ -235,7 +235,7 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
             model_pattern = f"trained_models/{algorithm.lower()}_fixedwing_{config}_*.zip"
             model_files = glob.glob(model_pattern)
             if not model_files:
-                print(f"   ⚠️  No model found for {algorithm} {config}")
+                print(f"     No model found for {algorithm} {config}")
                 continue
             
             latest_model = max(model_files, key=os.path.getmtime)
@@ -248,8 +248,8 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
                 tmp_venv = DummyVecEnv([lambda: UnseenPathEnv(config=config, path_type=path_type,
                                                               wind_enabled=wind_enabled,
                                                               wind_speed_mean=wind_gust_magnitude,
-                                                              wind_speed_std=wind_gust_duration,
-                                                              wind_heading_std=wind_transition_time)])
+                                                              wind_gust_duration=wind_gust_duration,
+                                                              wind_transition_time=wind_transition_time)])
                 try:
                     vecnorm_stats = VecNormalize.load(stats_path, tmp_venv)
                     vecnorm_stats.training = False
@@ -261,8 +261,8 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
             test_env = UnseenPathEnv(config=config, path_type=path_type,
                                     wind_enabled=wind_enabled,
                                     wind_speed_mean=wind_gust_magnitude,
-                                    wind_speed_std=wind_gust_duration,
-                                    wind_heading_std=wind_transition_time)
+                                    wind_gust_duration=wind_gust_duration,
+                                    wind_transition_time=wind_transition_time)
             obs_adapter = create_observation_adapter(model.observation_space, test_env.observation_space, config)
             
             # Run episode to get trajectory
@@ -307,10 +307,10 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
             ax.scatter(xs[-1], ys[-1], zs[-1], marker=marker, color=color, 
                       s=150, edgecolors='black', linewidths=1, alpha=0.9)
             
-            print(f"   ✅ {algorithm}: {termination_reason} - {len(xs)} steps")
+            print(f"    {algorithm}: {termination_reason} - {len(xs)} steps")
             
         except Exception as e:
-            print(f"   ❌ Failed to load/run {algorithm}: {e}")
+            print(f"    Failed to load/run {algorithm}: {e}")
             import traceback
             traceback.print_exc()
     
@@ -326,7 +326,7 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white', 
                    edgecolor='none', format='png', transparent=False)
-        print(f"   💾 Saved comparison plot: {save_path}")
+        print(f"    Saved comparison plot: {save_path}")
         plt.close()
     else:
         plt.show()
@@ -334,17 +334,17 @@ def plot_all_algorithms_3d_comparison(config, path_type, save_path=None, episode
 
 
 def run_unseen_validation(model_path, algorithm, config, path_type, vecnorm_stats=None, obs_adapter=None,
-                          wind_enabled=False, wind_gust_magnitude=1.0, 
+                          wind_enabled=True, wind_gust_magnitude=3.0, 
                           wind_gust_duration=5.0, wind_transition_time=1.0):
     """Validate model performance on unseen path type."""
     env = UnseenPathEnv(config=config, path_type=path_type,
                        wind_enabled=wind_enabled,
                        wind_speed_mean=wind_gust_magnitude,
-                       wind_speed_std=wind_gust_duration,
-                       wind_heading_std=wind_transition_time)
+                       wind_gust_duration=wind_gust_duration,
+                       wind_transition_time=wind_transition_time)
     model = load_model(model_path)
 
-    print(f"\n🧭 Validating on unseen path: {path_type.upper()}")
+    print(f"\n Validating on unseen path: {path_type.upper()}")
     
     # Track episode details for U-turn debugging
 
@@ -410,35 +410,35 @@ def run_unseen_validation(model_path, algorithm, config, path_type, vecnorm_stat
         for k, v in summary.items():
             f.write(f"{k}: {v}\n")
 
-    print(f"   ✅ {path_type.upper():<15} | Success {summary['success_rate']:.1f}% | "
+    print(f"    {path_type.upper():<15} | Success {summary['success_rate']:.1f}% | "
           f"Reward {summary['avg_reward']:.1f} | "
           f"OI-Roll {summary['oscillation_index_roll']:.3f} | OI-Pitch {summary['oscillation_index_pitch']:.3f}")
 
     return summary
 
 
-def validate_unseen_paths_all_models(wind_enabled=True, wind_gust_magnitude=2.0,
+def validate_unseen_paths_all_models(wind_enabled=True, wind_gust_magnitude=3.0,
                                     wind_gust_duration=5.0, wind_transition_time=1.0):
     """Run unseen-path validation across all trained models."""
     models = find_all_models()
     if not models:
-        print("❌ No trained models found in trained_models/. Please train first.")
+        print(" No trained models found in trained_models/. Please train first.")
         return
 
-    print(f"\n🚀 Starting unseen-path robustness validation on {len(models)} algorithms...")
+    print(f"\n Starting unseen-path robustness validation on {len(models)} algorithms...")
     
     # Print wind configuration
     if wind_enabled:
-        print(f"🌬️  Wind gusts enabled: magnitude={wind_gust_magnitude} m/s, duration={wind_gust_duration}s, transition={wind_transition_time}s")
+        print(f"  Wind gusts enabled: magnitude={wind_gust_magnitude} m/s, duration={wind_gust_duration}s, transition={wind_transition_time}s")
     else:
-        print("🌤️  Wind disabled for validation")
+        print("  Wind disabled for validation")
     
     # Create 3D comparison plots FIRST (before running full validation)
-    print(f"\n📊 Creating 3D algorithm comparison plots...")
+    print(f"\n Creating 3D algorithm comparison plots...")
     os.makedirs("validation_results", exist_ok=True)
     
     for path_type in UNSEEN_PATHS:
-        print(f"\n🎨 Generating comparison for {path_type.upper()}...")
+        print(f"\n Generating comparison for {path_type.upper()}...")
         comparison_save_path = f"validation_results/algorithm_comparison_3d_{path_type}.png"
         try:
             plot_all_algorithms_3d_comparison(
@@ -452,7 +452,7 @@ def validate_unseen_paths_all_models(wind_enabled=True, wind_gust_magnitude=2.0,
                 wind_transition_time=wind_transition_time
             )
         except Exception as e:
-            print(f"   ❌ Failed to create comparison plot for {path_type}: {e}")
+            print(f"    Failed to create comparison plot for {path_type}: {e}")
             import traceback
             traceback.print_exc()
     
@@ -469,7 +469,7 @@ def validate_unseen_paths_all_models(wind_enabled=True, wind_gust_magnitude=2.0,
             if cfg != "waypoint":
                 continue
             model_path = models[alg][cfg]
-            print(f"\n🔍 {alg.upper()} ({cfg}) → {model_path}")
+            print(f"\n {alg.upper()} ({cfg}) → {model_path}")
 
             stats_path = model_path.replace(".zip", "_vn.pkl")
             vecnorm_stats = None
@@ -478,14 +478,14 @@ def validate_unseen_paths_all_models(wind_enabled=True, wind_gust_magnitude=2.0,
                     tmp_env = DummyVecEnv([lambda: FixedWingUAVEnv(config=cfg,
                                                                    wind_enabled=wind_enabled,
                                                                    wind_speed_mean=wind_gust_magnitude,
-                                                                   wind_speed_std=wind_gust_duration,
-                                                                   wind_heading_std=wind_transition_time)])
+                                                                   wind_gust_duration=wind_gust_duration,
+                                                                   wind_transition_time=wind_transition_time)])
                     vecnorm_stats = VecNormalize.load(stats_path, tmp_env)
                     vecnorm_stats.training = False
                     vecnorm_stats.norm_reward = False
-                    print(f"   ✅ VecNormalize stats loaded")
+                    print(f"    VecNormalize stats loaded")
                 except Exception as e:
-                    print(f"   ⚠️ Failed to load VecNormalize: {e}")
+                    print(f"    Failed to load VecNormalize: {e}")
 
             tmp_env = FixedWingUAVEnv(config=cfg)
             model = load_model(model_path)
@@ -523,12 +523,12 @@ def validate_unseen_paths_all_models(wind_enabled=True, wind_gust_magnitude=2.0,
                     f"{s['success_rate']:<8.1f} {s['avg_reward']:<10.1f} {s['avg_dist_to_path']:<10.2f} "
                     f"{s['oscillation_index_roll']:<10.3f} {s['oscillation_index_pitch']:<10.3f}\n")
 
-    print(f"\n📊 Results saved to validation_results/unseen_paths_summary.txt")
-    print("📈 Individual episode plots are in each algorithm/config/path directory.")
+    print(f"\n Results saved to validation_results/unseen_paths_summary.txt")
+    print(" Individual episode plots are in each algorithm/config/path directory.")
 
 
 if __name__ == "__main__":
     validate_unseen_paths_all_models(wind_enabled=True,
-                                    wind_gust_magnitude=1.0,
+                                    wind_gust_magnitude=3.0,
                                     wind_gust_duration=10.0,
                                     wind_transition_time=1.0)

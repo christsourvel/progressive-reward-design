@@ -396,7 +396,8 @@ def create_observation_adapter(model_obs_space, env_obs_space, config=None):
 
 # === VALIDATION FUNCTIONS ===
 def run_validation(model_path, config, num_episodes=5, fixed_seeds=None, wind_enabled=True, 
-                   wind_gust_magnitude=2.0, wind_gust_duration=10.0, wind_transition_time=1.0):
+                   wind_gust_magnitude=5.0, wind_gust_duration=10.0, wind_transition_time=1.0,
+                   env_kwargs=None):
     """Run validation for a specific model.
     
     Args:
@@ -405,10 +406,12 @@ def run_validation(model_path, config, num_episodes=5, fixed_seeds=None, wind_en
         wind_gust_duration: How long gusts last in seconds (default: 10.0)
         wind_transition_time: Ramp up/down time in seconds (default: 1.0)
     """
+    env_kwargs = env_kwargs or {}
     env = FixedWingUAVEnv(config=config, wind_enabled=wind_enabled, 
                           wind_speed_mean=wind_gust_magnitude,  # Used as gust magnitude
                           wind_speed_std=0.5,  # Unused in gust model
-                          wind_heading_std=15.0)  # Unused in gust model
+                          wind_heading_std=15.0,
+                          **env_kwargs)  # Unused in gust model
     model = load_model(model_path)
     obs_adapter = create_observation_adapter(model.observation_space, env.observation_space, config)
     
@@ -419,16 +422,16 @@ def run_validation(model_path, config, num_episodes=5, fixed_seeds=None, wind_en
     if algorithm in ['ppo', 'sac', 'td3']:
         stats_path = model_path.replace('.zip', '') + "_vn.pkl"
         if os.path.exists(stats_path):
-            tmp_venv = DummyVecEnv([lambda: FixedWingUAVEnv(config=config)])
+            tmp_venv = DummyVecEnv([lambda: FixedWingUAVEnv(config=config, **env_kwargs)])
             try:
                 vecnorm_stats = VecNormalize.load(stats_path, tmp_venv)
                 vecnorm_stats.training = False
                 vecnorm_stats.norm_reward = False
-                print(f"   ✅ Loaded VecNormalize stats for {algorithm.upper()}")
+                print(f"    Loaded VecNormalize stats for {algorithm.upper()}")
             except Exception as e:
                 print(f"   Warning: failed to load VecNormalize stats: {e}")
         else:
-            print(f"   ⚠️  No VecNormalize stats found for {algorithm.upper()}")
+            print(f"     No VecNormalize stats found for {algorithm.upper()}")
     
     # Setup results directory
     algorithm = basename.split('_')[0].upper()
@@ -512,8 +515,8 @@ def run_validation(model_path, config, num_episodes=5, fixed_seeds=None, wind_en
     
     return summary
 
-def validate_all_models(num_episodes=5, wind_enabled=False, wind_gust_magnitude=2.0, 
-                       wind_gust_duration=10.0, wind_transition_time=1.0):
+def validate_all_models(num_episodes=5, wind_enabled=True, wind_gust_magnitude=5.0, 
+                       wind_gust_duration=10.0, wind_transition_time=1.0, env_kwargs=None):
     """Validate all trained models and show comparison plots.
     
     Args:
@@ -534,10 +537,10 @@ def validate_all_models(num_episodes=5, wind_enabled=False, wind_gust_magnitude=
     # Each algorithm will get the same 20 paths in the same order
     np.random.seed(42)  # Fixed seed for reproducible episode seeds
     fixed_seeds = [np.random.randint(0, 1000000) for _ in range(num_episodes)]
-    print(f"🔧 Using fixed seeds for fair comparison: {fixed_seeds[:5]}... (showing first 5)")
+    print(f" Using fixed seeds for fair comparison: {fixed_seeds[:5]}... (showing first 5)")
     
     if wind_enabled:
-        print(f"🌬️  Wind gusts enabled: magnitude={wind_gust_magnitude} m/s, duration={wind_gust_duration}s, transition={wind_transition_time}s")
+        print(f"  Wind gusts enabled: magnitude={wind_gust_magnitude} m/s, duration={wind_gust_duration}s, transition={wind_transition_time}s")
     
     all_results = []
     
@@ -546,19 +549,21 @@ def validate_all_models(num_episodes=5, wind_enabled=False, wind_gust_magnitude=
         for config in models[algorithm]:
             # Skip unsupported configs
             if config not in ['waypoint', 'goal_based', 'heuristic']:
-                print(f"\n⚠️  Skipping {algorithm} {config}: unsupported config (only 'waypoint', 'goal_based', and 'heuristic' supported)")
+                print(f"\n  Skipping {algorithm} {config}: unsupported config (only 'waypoint', 'goal_based', and 'heuristic' supported)")
                 continue
                 
             model_path = models[algorithm][config]
-            print(f"\n🔍 Found {algorithm} {config}: {model_path}")
+            print(f"\n Found {algorithm} {config}: {model_path}")
             
             try:
                 summary = run_validation(model_path, config, num_episodes, fixed_seeds,
                                         wind_enabled=wind_enabled, wind_gust_magnitude=wind_gust_magnitude,
-                                        wind_gust_duration=wind_gust_duration, wind_transition_time=wind_transition_time)
+                                        wind_gust_duration=wind_gust_duration,
+                                        wind_transition_time=wind_transition_time,
+                                        env_kwargs=env_kwargs)
                 all_results.append(summary)
             except Exception as e:
-                print(f"❌ Failed to validate {algorithm} {config}: {e}")
+                print(f" Failed to validate {algorithm} {config}: {e}")
     
     # Create comparison summary
     print(f"\n{'='*90}")
@@ -625,7 +630,7 @@ def plot_all_agents_comparison(config="waypoint", save_path=None, episode_seed=4
     models = find_all_models()
     
     if not models:
-        print("❌ No trained models found!")
+        print(" No trained models found!")
         return
     
     # Create environment
@@ -657,11 +662,11 @@ def plot_all_agents_comparison(config="waypoint", save_path=None, episode_seed=4
     # Plot each algorithm's trajectory
     for algorithm in ['PPO', 'SAC', 'TD3']:
         if algorithm not in models or config not in models[algorithm]:
-            print(f"⚠️  {algorithm} {config} model not found, skipping...")
+            print(f"  {algorithm} {config} model not found, skipping...")
             continue
             
         model_path = models[algorithm][config]
-        print(f"🔍 Loading {algorithm} {config}: {model_path}")
+        print(f" Loading {algorithm} {config}: {model_path}")
         
         try:
             # Load model
@@ -711,10 +716,10 @@ def plot_all_agents_comparison(config="waypoint", save_path=None, episode_seed=4
             ax.plot(xs[-1], ys[-1], marker=marker, color=colors[algorithm], 
                    markersize=12, markeredgecolor='black', markeredgewidth=1, zorder=4)
             
-            print(f"   ✅ {algorithm}: {term_reason}, {len(xs)} steps")
+            print(f"    {algorithm}: {term_reason}, {len(xs)} steps")
             
         except Exception as e:
-            print(f"   ❌ Failed to run {algorithm}: {e}")
+            print(f"    Failed to run {algorithm}: {e}")
     
     # Professional styling
     ax.set_xlabel('X (m)', fontsize=14, fontweight='bold')
@@ -736,19 +741,19 @@ def plot_all_agents_comparison(config="waypoint", save_path=None, episode_seed=4
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white',
                    edgecolor='none', format='png', transparent=False)
-        print(f"💾 Saved comparison plot to: {save_path}")
+        print(f" Saved comparison plot to: {save_path}")
         plt.close()
     else:
         plt.show()
 
 def main():
     """Main validation function - validates all trained models"""
-    print("🚀 Starting comprehensive validation of all trained models...")
+    print(" Starting comprehensive validation of all trained models...")
     print("This will validate all algorithm x configuration combinations.")
     
     try:
         # First, create comparison plot for all agents
-        print("\n📊 Creating algorithm comparison plot...")
+        print("\n Creating algorithm comparison plot...")
         os.makedirs("validation_results", exist_ok=True)
         plot_all_agents_comparison(config="waypoint", 
                                    save_path="validation_results/algorithm_comparison_waypoint.png",
@@ -758,24 +763,24 @@ def main():
                                    wind_gust_duration=10.0,
                                    wind_transition_time=1.0)
         
-        # Validate all models and show comparison with wind gusts
+        # Validate all models with 5 m/s wind gusts
         results = validate_all_models(num_episodes=20, wind_enabled=True,
-                                      wind_gust_magnitude=5.0,
+                          wind_gust_magnitude=5.0,
                                       wind_gust_duration=10.0,
                                       wind_transition_time=1.0)
         
         if results:
-            print(f"\n✅ Validation complete! Results saved in validation_results/")
-            print(f"📊 {len(results)} model combinations validated")
+            print(f"\n Validation complete! Results saved in validation_results/")
+            print(f" {len(results)} model combinations validated")
             
             # Show plots for each model (you can comment this out if too many)
-            print(f"\n📈 Individual episode plots saved in validation_results/")
+            print(f"\n Individual episode plots saved in validation_results/")
             
         else:
-            print("❌ No models found to validate. Please run training first.")
+            print(" No models found to validate. Please run training first.")
             
     except Exception as e:
-        print(f"❌ Validation failed: {e}")
+        print(f" Validation failed: {e}")
 
 if __name__ == "__main__":
     main()

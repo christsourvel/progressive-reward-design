@@ -10,7 +10,7 @@ def wrap_deg(a):
 class WindGustModel:
     """Smooth, intermittent wind-gust model for UAV simulation."""
 
-    def __init__(self, seed=None, wind_gust_magnitude=8.0, wind_gust_duration=10.0, 
+    def __init__(self, seed=None, wind_gust_magnitude=0.0, wind_gust_duration=10.0, 
                  wind_transition_time=1.0):
         self.rng = np.random.default_rng(seed)
 
@@ -26,6 +26,7 @@ class WindGustModel:
         self.target_gust  = {"x": 0.0, "y": 0.0}
         self.gust_transition_start = 0.0
         self.gust_end_time = 0.0
+        self._is_fading_out = False
 
     def reset(self):
         """Reset the wind model to initial state."""
@@ -35,12 +36,13 @@ class WindGustModel:
         self.target_gust  = {"x": 0.0, "y": 0.0}
         self.gust_transition_start = 0.0
         self.gust_end_time = 0.0
+        self._is_fading_out = False
 
     def step(self, dt=0.1):
         """Advance the wind model by one timestep."""
         self.time += dt
 
-        # 1️⃣ Start a new gust
+        # 1⃣ Start a new gust
         if self.time >= self.next_gust_time:
             gust_dir = self.rng.uniform(0, 2 * np.pi)
             gust_mag = self.wind_gust_magnitude
@@ -51,21 +53,27 @@ class WindGustModel:
             self.gust_transition_start = self.time
             self.gust_end_time = self.time + self.wind_gust_duration
             self.next_gust_time = self.gust_end_time + self.rng.uniform(10.0, 20.0)
+            self._is_fading_out = False
 
-        # 2️⃣ End the current gust (fade out)
-        elif self.time >= self.gust_end_time and (
-            self.current_gust["x"] != 0.0 or self.current_gust["y"] != 0.0
-        ):
-            self.target_gust = {"x": 0.0, "y": 0.0}
-            self.gust_transition_start = self.time
+        # 2⃣ End the current gust (fade out)
+        elif self.time >= self.gust_end_time and not self._is_fading_out:
+            gust_norm = np.hypot(self.current_gust["x"], self.current_gust["y"])
+            if gust_norm > 1e-3:
+                self.target_gust = {"x": 0.0, "y": 0.0}
+                self.gust_transition_start = self.time
+                self._is_fading_out = True
 
-        # 3️⃣ Smooth transition (cosine ramp)
+        # 3⃣ Smooth transition (cosine ramp)
         if self.time < self.gust_transition_start + self.wind_transition_time:
             progress = (self.time - self.gust_transition_start) / self.wind_transition_time
             progress = np.clip(progress, 0.0, 1.0)
             ease = 0.5 * (1 - np.cos(np.pi * progress))
             self.current_gust["x"] = (1 - ease) * self.current_gust["x"] + ease * self.target_gust["x"]
             self.current_gust["y"] = (1 - ease) * self.current_gust["y"] + ease * self.target_gust["y"]
+
+            if self._is_fading_out and progress >= 1.0:
+                self.current_gust = {"x": 0.0, "y": 0.0}
+                self._is_fading_out = False
 
         return self.current_gust["x"], self.current_gust["y"]
 
@@ -89,13 +97,15 @@ class FixedWingUAVEnv(gym.Env):
                  speed=20.0,
                  max_roll_deg=45.0,
                  path_len_m=1000.0,
-                 goal_center_radius_m=25.0,
+                 goal_center_radius_m=35.0,
                  bounds=((-500.0, 2000.0), (-500.0, 500.0)),
                  g=9.81,
-                 wind_enabled=False,
-                 wind_speed_mean=1.0,
+                 wind_enabled=True,
+                 wind_speed_mean=0.0,
                  wind_speed_std=0.5,
-                 wind_heading_std=15.0
+                 wind_heading_std=15.0,
+                 wind_gust_duration=10.0,
+                 wind_transition_time=1.0
                  ):
         super().__init__()
 
@@ -125,16 +135,18 @@ class FixedWingUAVEnv(gym.Env):
         # === WIND PARAMETERS ===
         self.wind_enabled = bool(wind_enabled)
         self.wind_speed_mean = float(wind_speed_mean)  # m/s (used as gust magnitude)
-        self.wind_speed_std = float(wind_speed_std)  # seconds (used as gust duration)
-        self.wind_heading_std = float(wind_heading_std)  # seconds (used as transition time)
+        self.wind_speed_std = float(wind_speed_std)  # m/s (unused in gust model)
+        self.wind_heading_std = float(wind_heading_std)  # degrees (unused in gust model)
+        self.wind_gust_duration = float(wind_gust_duration)  # seconds gust lasts
+        self.wind_transition_time = float(wind_transition_time)  # seconds to ramp up/down
         
         # Initialize wind gust model
         if self.wind_enabled:
             self.wind_model = WindGustModel(
                 seed=None,  # Will be set in reset()
                 wind_gust_magnitude=self.wind_speed_mean,
-                wind_gust_duration=self.wind_speed_std,  # Now using the actual parameter!
-                wind_transition_time=self.wind_heading_std  # Now using the actual parameter!
+                wind_gust_duration=self.wind_gust_duration,
+                wind_transition_time=self.wind_transition_time
             )
         else:
             self.wind_model = None
@@ -155,7 +167,7 @@ class FixedWingUAVEnv(gym.Env):
         # Y: circle center at 200, radius 200, so Y goes from 0 to 400, use -100 to 500 with margin
         self.xmin, self.xmax = bounds[0]
         self.ymin, self.ymax = bounds[1]
-        self.max_steps = 1300
+        self.max_steps = 2600
 
         # === ACTION/OBSERVATION SPACES ===
         self.action_space = gym.spaces.Box(
@@ -564,6 +576,7 @@ class FixedWingUAVEnv(gym.Env):
         roll_cmd = np.clip(self._prev_cmd[0] + roll_rate_change_cmd, -1.0, 1.0)
         pitch_cmd = np.clip(self._prev_cmd[1] + pitch_rate_change_cmd, -1.0, 1.0)
         
+        # Magnitude values are used for rate-cap penalties and diagnostics.
         roll_rate_deg_per_step = abs(roll_rate_change_deg)
         pitch_rate_deg_per_step = abs(pitch_rate_change_deg)
         
@@ -692,23 +705,23 @@ class FixedWingUAVEnv(gym.Env):
                     break
         
         # Roll rate penalty
-        if roll_rate_deg_per_step > 0.05:
+        if roll_rate_deg_per_step > 0.5:
             roll_rate_penalty = 1.0 * (roll_rate_deg_per_step - 0.5) ** 2
             reward -= roll_rate_penalty
         
         # Pitch rate penalty (increased penalty for excessive pitch changes)
-        if pitch_rate_deg_per_step > 0.05:
-            pitch_rate_penalty = 3.0 * (pitch_rate_deg_per_step - 0.4) ** 2
+        if pitch_rate_deg_per_step > 0.3:
+            pitch_rate_penalty = 3.0 * (pitch_rate_deg_per_step - 0.3) ** 2
             reward -= pitch_rate_penalty
         
-        # Jerk penalty (rate of change of roll rate)
-        roll_jerk = abs(roll_rate_deg_per_step - self._prev_roll_rate)
+        # Jerk penalty uses signed rates so reversals are penalized correctly.
+        roll_jerk = abs(roll_rate_change_deg - self._prev_roll_rate)
         if roll_jerk > 0.3:
             roll_jerk_penalty = 0.1 * (roll_jerk - 0.3) ** 2
             reward -= roll_jerk_penalty
         
-        # Pitch jerk penalty (rate of change of pitch rate)
-        pitch_jerk = abs(pitch_rate_deg_per_step - self._prev_pitch_rate)
+        # Pitch jerk penalty uses signed rates so reversals are penalized correctly.
+        pitch_jerk = abs(pitch_rate_change_deg - self._prev_pitch_rate)
         if pitch_jerk > 0.2:
             pitch_jerk_penalty = 0.15 * (pitch_jerk - 0.2) ** 2
             reward -= pitch_jerk_penalty
@@ -720,7 +733,7 @@ class FixedWingUAVEnv(gym.Env):
 
         # === CHECK TERMINATION CONDITIONS ===
         if not terminated and not self._in_bounds():
-            truncated = True
+            terminated = True
             term_reason = "out_of_bounds"
             reward -= 50.0  # Strong penalty for going out of bounds
         if not terminated and not truncated and (self.current_step >= self.max_steps):
@@ -759,8 +772,8 @@ class FixedWingUAVEnv(gym.Env):
         self._d_prev = dist_to_goal
         self._prev_prev_action = self._prev_cmd.copy()
         self._prev_cmd = np.array([roll_cmd, pitch_cmd])       # applied command state (for physics + obs)
-        self._prev_roll_rate = roll_rate_deg_per_step
-        self._prev_pitch_rate = pitch_rate_deg_per_step
+        self._prev_roll_rate = roll_rate_change_deg
+        self._prev_pitch_rate = pitch_rate_change_deg
         
         return obs, reward, terminated, truncated, info
 

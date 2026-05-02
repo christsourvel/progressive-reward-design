@@ -763,11 +763,11 @@ def run_validation_unseen_path(model_path, config, path_type, num_episodes=1,
                 vecnorm_stats = VecNormalize.load(stats_path, tmp_venv)
                 vecnorm_stats.training = False
                 vecnorm_stats.norm_reward = False
-                print(f"   ✅ Loaded VecNormalize stats for {algorithm.upper()}")
+                print(f"    Loaded VecNormalize stats for {algorithm.upper()}")
             except Exception as e:
                 print(f"   Warning: failed to load VecNormalize stats: {e}")
         else:
-            print(f"   ⚠️  No VecNormalize stats found for {algorithm.upper()}")
+            print(f"     No VecNormalize stats found for {algorithm.upper()}")
     
     # Extract algorithm and config from path for naming
     basename = os.path.basename(model_path).replace('.zip', '')
@@ -920,9 +920,9 @@ def validate_all_models_unseen_paths(num_episodes=1, wind_enabled=False,
     
     # Print wind configuration
     if wind_enabled:
-        print(f"🌬️  Wind gusts enabled: magnitude={wind_gust_magnitude} m/s, duration={wind_gust_duration}s, transition={wind_transition_time}s")
+        print(f"  Wind gusts enabled: magnitude={wind_gust_magnitude} m/s, duration={wind_gust_duration}s, transition={wind_transition_time}s")
     else:
-        print("🌤️  Wind disabled for validation")
+        print("  Wind disabled for validation")
     
     all_results = []
     
@@ -930,17 +930,17 @@ def validate_all_models_unseen_paths(num_episodes=1, wind_enabled=False,
     for algorithm in models:
         # Skip algorithms not in the toggle list
         if algorithm not in ALGORITHMS_TO_TEST:
-            print(f"\n⚠️  Skipping {algorithm}: not in ALGORITHMS_TO_TEST")
+            print(f"\n  Skipping {algorithm}: not in ALGORITHMS_TO_TEST")
             continue
             
         for config in models[algorithm]:
             # Skip configs not in the toggle list
             if config not in CONFIGS_TO_TEST:
-                print(f"\n⚠️  Skipping {algorithm} {config}: not in CONFIGS_TO_TEST")
+                print(f"\n  Skipping {algorithm} {config}: not in CONFIGS_TO_TEST")
                 continue
                 
             model_path = models[algorithm][config]
-            # print(f"\n🔍 Found {algorithm} {config}: {model_path}")
+            # print(f"\n Found {algorithm} {config}: {model_path}")
             
             for path_type in PATH_TYPES_TO_TEST:
                 try:
@@ -955,7 +955,7 @@ def validate_all_models_unseen_paths(num_episodes=1, wind_enabled=False,
                                                             wind_transition_time=wind_transition_time)
                     all_results.append(summary)
                 except Exception as e:
-                    print(f"❌ Failed to validate {algorithm} {config} on {path_type}: {e}")
+                    print(f" Failed to validate {algorithm} {config} on {path_type}: {e}")
     
     # Create comparison summary
     print(f"\n{'='*150}")
@@ -1125,11 +1125,11 @@ def create_comparison_plots(all_results):
         if len(results) > 1:  # Only create comparison if we have multiple algorithms
             save_path = f"validation_results_paths/{config}_{path_type}_comparison.png"
             plot_algorithm_comparison(results, path_type, config, save_path)
-            print(f"✅ Saved algorithm comparison: {save_path}")
+            print(f" Saved algorithm comparison: {save_path}")
 
 def main():
     """Main validation function - validates all trained models on unseen paths"""
-    print("🚀 Starting UNSEEN PATHS validation of all trained models...")
+    print(" Starting UNSEEN PATHS validation of all trained models...")
     print("This will test models on completely different paths:")
     print("  - Circular trajectories")
     print("  - Figure-8 patterns") 
@@ -1147,21 +1147,21 @@ def main():
                                                         wind_transition_time=1.0)
         
         if results:
-            print(f"\n✅ UNSEEN PATHS validation complete! Results saved in validation_results_paths/")
-            print(f"📊 {len(results)} model-path combinations validated")
+            print(f"\n UNSEEN PATHS validation complete! Results saved in validation_results_paths/")
+            print(f" {len(results)} model-path combinations validated")
             
             # Create comparison plots
-            print(f"\n📈 Creating algorithm comparison plots...")
+            print(f"\n Creating algorithm comparison plots...")
             create_comparison_plots(results)
             
             # Show plots for each model (you can comment this out if too many)
-            print(f"\n📈 Individual episode plots saved in validation_results_paths/")
+            print(f"\n Individual episode plots saved in validation_results_paths/")
             
         else:
-            print("❌ No models found to validate. Please run training first.")
+            print(" No models found to validate. Please run training first.")
             
     except Exception as e:
-        print(f"❌ UNSEEN PATHS validation failed: {e}")
+        print(f" UNSEEN PATHS validation failed: {e}")
 
 if __name__ == "__main__":
     main()

@@ -34,13 +34,13 @@ def _normalize_obs_if_needed(obs, vn):
     # Handle dimension mismatch: if model was trained with 4D obs but env now uses 5D
     # We need to match dimensions by truncating the normalization stats
     if len(mean) < len(obs):
-        print(f"   ⚠️  Dimension mismatch: model expects {len(mean)}D obs, but env provides {len(obs)}D")
+        print(f"     Dimension mismatch: model expects {len(mean)}D obs, but env provides {len(obs)}D")
         print(f"   Padding normalization stats to match current observation space")
         # Pad with zeros for mean and ones for variance for the new dimension
         mean = np.concatenate([mean, np.zeros(len(obs) - len(mean))])
         var = np.concatenate([var, np.ones(len(obs) - len(mean))])
     elif len(mean) > len(obs):
-        print(f"   ⚠️  Dimension mismatch: model expects {len(mean)}D obs, but env provides {len(obs)}D")
+        print(f"     Dimension mismatch: model expects {len(mean)}D obs, but env provides {len(obs)}D")
         print(f"   Truncating normalization stats to match current observation space")
         mean = mean[:len(obs)]
         var = var[:len(obs)]
@@ -282,11 +282,11 @@ def run_validation(model_path, num_episodes=20, seed=42):
             vecnorm_stats = VecNormalize.load(stats_path, tmp_venv)
             vecnorm_stats.training = False
             vecnorm_stats.norm_reward = False
-            print(f"   ✅ Loaded VecNormalize stats for {algorithm.upper()}")
+            print(f"    Loaded VecNormalize stats for {algorithm.upper()}")
         except Exception as e:
-            print(f"   ⚠️  Warning: failed to load VecNormalize stats for {algorithm.upper()}: {e}")
+            print(f"     Warning: failed to load VecNormalize stats for {algorithm.upper()}: {e}")
     else:
-        print(f"   ⚠️  No VecNormalize stats found for {algorithm.upper()} - using raw observations")
+        print(f"     No VecNormalize stats found for {algorithm.upper()} - using raw observations")
     
     # Extract algorithm from path for naming
     basename = os.path.basename(model_path).replace('.zip', '')
@@ -422,7 +422,7 @@ def validate_all_models(num_episodes=20, seed=42):
         print("No trained models found! Please run training first.")
         return
     
-    print(f"🌱 Using seed {seed} for reproducible validation")
+    print(f" Using seed {seed} for reproducible validation")
     os.makedirs("validation_results", exist_ok=True)
     
     all_results = []
@@ -430,13 +430,13 @@ def validate_all_models(num_episodes=20, seed=42):
     # Validate each model
     for algorithm in models:
         model_path = models[algorithm]
-        print(f"\n🔍 Found {algorithm}: {model_path}")
+        print(f"\n Found {algorithm}: {model_path}")
         
         try:
             summary = run_validation(model_path, num_episodes, seed=seed)
             all_results.append(summary)
         except Exception as e:
-            print(f"❌ Failed to validate {algorithm}: {e}")
+            print(f" Failed to validate {algorithm}: {e}")
     
     # Create comparison summary
     print(f"\n{'='*80}")
@@ -490,11 +490,11 @@ def plot_algorithm_comparison(models, num_episodes=1, fixed_seed=42):
     color_idx = 0
     
     # Use fixed seed for fair comparison
-    print(f"🔧 Using fixed seed {fixed_seed} for fair algorithm comparison")
+    print(f" Using fixed seed {fixed_seed} for fair algorithm comparison")
     
     for algorithm in models:
         model_path = models[algorithm]
-        print(f"🔍 Plotting {algorithm}: {model_path}")
+        print(f" Plotting {algorithm}: {model_path}")
         
         try:
             # Setup environment and model
@@ -541,7 +541,7 @@ def plot_algorithm_comparison(models, num_episodes=1, fixed_seed=42):
             color_idx += 1
             
         except Exception as e:
-            print(f"❌ Failed to plot {algorithm}: {e}")
+            print(f" Failed to plot {algorithm}: {e}")
     
     # Plot desired path (only once) with professional styling
     if 'env' in locals():
@@ -574,54 +574,54 @@ def plot_algorithm_comparison(models, num_episodes=1, fixed_seed=42):
                 edgecolor='none', format='png', transparent=False)
     plt.show()
     
-    print(f"✅ Algorithm comparison plot saved to {save_path}")
+    print(f" Algorithm comparison plot saved to {save_path}")
 
 def create_comparison_plot():
     """Standalone function to create algorithm comparison plot."""
-    print("🔍 Creating algorithm comparison plot...")
+    print(" Creating algorithm comparison plot...")
     models = find_all_models()
     
     if not models:
-        print("❌ No models found!")
+        print(" No models found!")
         return
     
     plot_algorithm_comparison(models)
 
 def main():
     """Main validation function - validates all trained models"""
-    print("🚀 Starting comprehensive validation of all trained models...")
+    print(" Starting comprehensive validation of all trained models...")
     print("This will validate all algorithm x configuration combinations.")
     
     # Use same seed as training for consistency
     seed = 42
-    print(f"🌱 Using seed {seed} for reproducible validation")
+    print(f" Using seed {seed} for reproducible validation")
     
     try:
         # Find all models first
         models = find_all_models()
         
         if not models:
-            print("❌ No models found to validate. Please run training first.")
+            print(" No models found to validate. Please run training first.")
             return
         
         # Create algorithm comparison plot
-        print("\n📊 Creating algorithm comparison plot...")
+        print("\n Creating algorithm comparison plot...")
         plot_algorithm_comparison(models)
         
         # Validate all models and show comparison
         results = validate_all_models(num_episodes=20, seed=seed)
         
         if results:
-            print(f"\n✅ Validation complete! Results saved in validation_results/")
-            print(f"📊 {len(results)} model combinations validated")
-            print(f"📈 Individual episode plots saved in validation_results/")
-            print(f"📈 Algorithm comparison plot saved as algorithm_comparison.png")
+            print(f"\n Validation complete! Results saved in validation_results/")
+            print(f" {len(results)} model combinations validated")
+            print(f" Individual episode plots saved in validation_results/")
+            print(f" Algorithm comparison plot saved as algorithm_comparison.png")
             
         else:
-            print("❌ No models found to validate. Please run training first.")
+            print(" No models found to validate. Please run training first.")
             
     except Exception as e:
-        print(f"❌ Validation failed: {e}")
+        print(f" Validation failed: {e}")
 
 if __name__ == "__main__":
     main()

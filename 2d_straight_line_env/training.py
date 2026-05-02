@@ -113,22 +113,22 @@ def train_all_experiments(seed=42):
                 vec_env = model.get_env()
                 if isinstance(vec_env, VecNormalize) or hasattr(vec_env, "save"):
                     vec_env.save(model_path + "_vn.pkl")
-                    print(f"✅ Saved VecNormalize stats to {model_path}_vn.pkl")
+                    print(f" Saved VecNormalize stats to {model_path}_vn.pkl")
             except Exception as e_save:
-                print(f"⚠️ Could not save VecNormalize stats: {e_save}")
+                print(f" Could not save VecNormalize stats: {e_save}")
             
-            print(f"✅ Saved {algorithm} model to {model_path}.zip")
+            print(f" Saved {algorithm} model to {model_path}.zip")
             results.append((algorithm, model_path))
             
         except Exception as e:
-            print(f"❌ Failed to train {algorithm}: {e}")
+            print(f" Failed to train {algorithm}: {e}")
             results.append((algorithm, f"FAILED: {e}"))
     
     print(f"\n{'='*60}")
     print("TRAINING SUMMARY")
     print(f"{'='*60}")
     for alg, result in results:
-        status = "✅ SUCCESS" if not result.startswith("FAILED") else "❌ FAILED"
+        status = " SUCCESS" if not result.startswith("FAILED") else " FAILED"
         print(f"{alg:>5}: {status}")
     
     return results
@@ -139,7 +139,7 @@ def main():
 
     # Train all combinations with fixed seed for reproducibility
     seed = 42
-    print(f"🌱 Using seed {seed} for reproducible training")
+    print(f" Using seed {seed} for reproducible training")
     results = train_all_experiments(seed=seed)
     
     print("\nAll training experiments complete!")

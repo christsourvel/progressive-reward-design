@@ -10,7 +10,7 @@ def wrap_deg(a):
 class WindGustModel:
     """Smooth, intermittent wind-gust model for UAV simulation."""
 
-    def __init__(self, seed=None, wind_gust_magnitude=8.0, wind_gust_duration=10.0, 
+    def __init__(self, seed=None, wind_gust_magnitude=0.0, wind_gust_duration=10.0, 
                  wind_transition_time=1.0):
         self.rng = np.random.default_rng(seed)
 
@@ -26,6 +26,7 @@ class WindGustModel:
         self.target_gust  = {"x": 0.0, "y": 0.0}
         self.gust_transition_start = 0.0
         self.gust_end_time = 0.0
+        self._is_fading_out = False
 
     def reset(self):
         """Reset the wind model to initial state."""
@@ -35,12 +36,13 @@ class WindGustModel:
         self.target_gust  = {"x": 0.0, "y": 0.0}
         self.gust_transition_start = 0.0
         self.gust_end_time = 0.0
+        self._is_fading_out = False
 
     def step(self, dt=0.1):
         """Advance the wind model by one timestep."""
         self.time += dt
 
-        # 1️⃣ Start a new gust
+        # 1⃣ Start a new gust
         if self.time >= self.next_gust_time:
             gust_dir = self.rng.uniform(0, 2 * np.pi)
             gust_mag = self.wind_gust_magnitude
@@ -51,21 +53,27 @@ class WindGustModel:
             self.gust_transition_start = self.time
             self.gust_end_time = self.time + self.wind_gust_duration
             self.next_gust_time = self.gust_end_time + self.rng.uniform(10.0, 20.0)
+            self._is_fading_out = False
 
-        # 2️⃣ End the current gust (fade out)
-        elif self.time >= self.gust_end_time and (
-            self.current_gust["x"] != 0.0 or self.current_gust["y"] != 0.0
-        ):
-            self.target_gust = {"x": 0.0, "y": 0.0}
-            self.gust_transition_start = self.time
+        # 2⃣ End the current gust (fade out)
+        elif self.time >= self.gust_end_time and not self._is_fading_out:
+            gust_norm = np.hypot(self.current_gust["x"], self.current_gust["y"])
+            if gust_norm > 1e-3:
+                self.target_gust = {"x": 0.0, "y": 0.0}
+                self.gust_transition_start = self.time
+                self._is_fading_out = True
 
-        # 3️⃣ Smooth transition (cosine ramp)
+        # 3⃣ Smooth transition (cosine ramp)
         if self.time < self.gust_transition_start + self.wind_transition_time:
             progress = (self.time - self.gust_transition_start) / self.wind_transition_time
             progress = np.clip(progress, 0.0, 1.0)
             ease = 0.5 * (1 - np.cos(np.pi * progress))
             self.current_gust["x"] = (1 - ease) * self.current_gust["x"] + ease * self.target_gust["x"]
             self.current_gust["y"] = (1 - ease) * self.current_gust["y"] + ease * self.target_gust["y"]
+
+            if self._is_fading_out and progress >= 1.0:
+                self.current_gust = {"x": 0.0, "y": 0.0}
+                self._is_fading_out = False
 
         return self.current_gust["x"], self.current_gust["y"]
 
@@ -95,9 +103,13 @@ class FixedWingUAVEnv(gym.Env):
                  bounds=((-500.0, 1500.0), (-500.0, 500.0)),
                  g=9.81,
                  wind_enabled=False,
-                 wind_speed_mean=2.0,
+                 wind_speed_mean=0.0,
                  wind_speed_std=0.5,
-                 wind_heading_std=15.0
+                 wind_heading_std=15.0,
+                 roll_rate_penalty_coeff=0.2,
+                 roll_rate_penalty_threshold=0.5,
+                 jerk_penalty_coeff=0.1,
+                 jerk_penalty_threshold=0.3
                  ):
         super().__init__()
 
@@ -142,6 +154,10 @@ class FixedWingUAVEnv(gym.Env):
         self.checkpoint_reward = 25.0
         self.checkpoint_radius = 25.0
         self.num_checkpoints = 16
+        self.roll_rate_penalty_coeff = float(roll_rate_penalty_coeff)
+        self.roll_rate_penalty_threshold = float(roll_rate_penalty_threshold)
+        self.jerk_penalty_coeff = float(jerk_penalty_coeff)
+        self.jerk_penalty_threshold = float(jerk_penalty_threshold)
 
         # === ENVIRONMENT BOUNDS ===
         self.xmin, self.xmax = bounds[0]
@@ -160,7 +176,7 @@ class FixedWingUAVEnv(gym.Env):
             # [range_to_next_cp, bearing_to_next_cp, cross_track_error, prev_roll_cmd]
             self.observation_space = gym.spaces.Box(
                 low=np.array([0.0, -180.0, -np.inf, -1.0], dtype=np.float32),
-                high=np.array([np.inf, np.inf, 180.0, np.inf, 1.0], dtype=np.float32),
+                high=np.array([np.inf, 180.0, np.inf, 1.0], dtype=np.float32),
                 dtype=np.float32,
             )
         elif self.config == "goal_based":
@@ -358,6 +374,8 @@ class FixedWingUAVEnv(gym.Env):
                 amplitude_modulation[segment_start + j] = peak_amplitude
         
         self.path_y_array = amplitude_modulation * base_sine
+        if hasattr(self, '_cached_path_length'):
+            del self._cached_path_length
         
         # === SET START/END POINTS ===
         self.x0 = self.y0 = 0.0
@@ -489,6 +507,8 @@ class FixedWingUAVEnv(gym.Env):
         truncated = False
         term_reason = "running"
         checkpoint_reached_this_step = None
+        roll_rate_penalty = 0.0
+        jerk_penalty = 0.0
 
         if self.config == "waypoint":
             reward = 0.0
@@ -525,14 +545,15 @@ class FixedWingUAVEnv(gym.Env):
                         break
             
             # Roll rate penalty
-            if roll_rate_deg_per_step > 0.5:
-                roll_rate_penalty = 0.2 * (roll_rate_deg_per_step - 0.5) ** 2
+            if self.roll_rate_penalty_coeff > 0.0 and roll_rate_deg_per_step > self.roll_rate_penalty_threshold:
+                roll_rate_penalty = self.roll_rate_penalty_coeff * (roll_rate_deg_per_step - self.roll_rate_penalty_threshold) ** 2
                 reward -= roll_rate_penalty
             
             # Jerk penalty (rate of change of roll rate)
-            roll_jerk = abs(roll_rate_deg_per_step - self._prev_roll_rate)
-            if roll_jerk > 0.3:
-                jerk_penalty = 0.1 * (roll_jerk - 0.3) ** 2
+            # Use signed roll-rate for jerk so direction reversals are penalized correctly.
+            roll_jerk = abs(roll_rate_change_deg - self._prev_roll_rate)
+            if self.jerk_penalty_coeff > 0.0 and roll_jerk > self.jerk_penalty_threshold:
+                jerk_penalty = self.jerk_penalty_coeff * (roll_jerk - self.jerk_penalty_threshold) ** 2
                 reward -= jerk_penalty
             
             # Success condition
@@ -584,7 +605,7 @@ class FixedWingUAVEnv(gym.Env):
 
         # === CHECK TERMINATION CONDITIONS ===
         if not terminated and not self._in_bounds():
-            truncated = True
+            terminated = True
             term_reason = "out_of_bounds"
         if not terminated and not truncated and (self.current_step >= self.max_steps):
             truncated = True
@@ -605,16 +626,19 @@ class FixedWingUAVEnv(gym.Env):
             "next_checkpoint_idx": self.next_checkpoint_idx,
             "checkpoints_completed": self.next_checkpoint_idx >= len(self.checkpoint_positions),
             "roll_rate_deg_per_step": float(roll_rate_deg_per_step),
+            "roll_rate_penalty": float(roll_rate_penalty),
+            "jerk_penalty": float(jerk_penalty),
         }
         
         if checkpoint_reached_this_step is not None:
             info["checkpoint_reached"] = checkpoint_reached_this_step
 
         # === UPDATE STATE ===
-        obs = self._obs()
         self._d_prev = dist_to_goal
         self._prev_prev_action = self._prev_action
         self._prev_action = roll_cmd
+        self._prev_roll_rate = roll_rate_change_deg
+        obs = self._obs()
         
         return obs, reward, terminated, truncated, info
 
