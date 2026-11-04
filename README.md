@@ -44,6 +44,7 @@ progressive-reward-design/
 │   ├── training.py
 │   ├── validation.py
 │   └── validate_unseen_paths.py # 3D unseen paths (helix, descending-S)
+├── requirements.txt             # Python dependencies
 ├── LICENSE                      # Apache 2.0 License
 └── README.md                    # This file
 ```
@@ -57,7 +58,7 @@ progressive-reward-design/
    cd progressive-reward-design
    ```
 
-2. **Install dependencies**:
+2. **Install dependencies** (from the repository root):
 
    ```bash
    pip install -r requirements.txt
@@ -111,18 +112,20 @@ Tests trained agents on novel geometries (circles, figure-8s, spirals, helixes) 
 
 ## Cite Our Work
 
-**Paper Status**: Under review, preprint available at Research Square https://doi.org/10.21203/rs.3.rs-8060158/v1
-
-If you use this code, please reference:
+If you use this code or research in your work, please cite the published journal paper:
 
 ```bibtex
-@article{tsourveloudis2025uav,
-  title={UAV Navigation using Reinforcement Learning: A Systematic Approach to Progressive Reward Function Design},
+@article{tsourveloudis2026uav,
+  title={UAV Navigation using Reinforcement Learning: a Systematic Approach to Progressive Reward Function Design},
   author={Tsourveloudis, Christos and Doitsidis, Lefteris},
-  journal={Research Square},
-  year={2025},
-  doi={10.21203/rs.3.rs-8060158/v1},
-  note={Preprint, Version 1}
+  journal={Journal of Intelligent \& Robotic Systems},
+  volume={112},
+  number={4},
+  pages={78},
+  year={2026},
+  publisher={Springer},
+  doi={10.1007/s10846-026-02408-7},
+  url={https://doi.org/10.1007/s10846-026-02408-7}
 }
 ```
 
